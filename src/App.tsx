@@ -101,6 +101,38 @@ export default function App() {
     });
     setSeats(initialSeats);
   }, []);
+  // Firebase Realtime Orders Listener
+  useEffect(() => {
+    const ordersRef = ref(db, 'orders');
+    const unsubscribe = onValue(ordersRef, (snapshot) => {
+      const data = snapshot.val();
+      if (!data) {
+        setOrders([]);
+        return;
+      }
+      const orderList = Object.entries(data).map(([key, val]) => ({
+        id: val.id || key,
+        seat: val.seat || 'Unknown',
+        hall: 'Hall 1 / Screen 1',
+        items: (val.items || []).map(it => ({
+          name: it.name,
+          qty: it.quantity || 1,
+          price: 0
+        })),
+        paymentType: val.payment === 'cash' ? 'cash' : 'digital',
+        totalAmount: 0,
+        status: val.status || 'new',
+        timestamp: val.timestamp || Date.now()
+      }));
+      orderList.sort((a, b) => b.timestamp - a.timestamp);
+      setOrders(orderList);
+      if (orderList.length > 0 && orderList[0].status === 'new') {
+        playChime();
+      }
+    });
+    return () => off(ordersRef);
+  }, []);
+
 
   // Initialize KDS BroadcastChannel & sample orders
   useEffect(() => {
