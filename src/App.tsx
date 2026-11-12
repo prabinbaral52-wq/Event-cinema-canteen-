@@ -10,6 +10,9 @@ import {
   RotateCcw, Sparkles, Lock, Check, X, Bell, Volume2, VolumeX, 
   ChefHat, PlusCircle, DollarSign, RefreshCw, Trash2
 } from 'lucide-react';
+import { ref, onValue, off } from 'firebase/database';
+import { db } from './firebase';
+
 
 interface Seat {
   id: string;
