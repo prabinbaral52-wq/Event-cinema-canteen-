@@ -1,0 +1,112 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Hardened helper primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidFirstItem(items) {
+      return items[0] is map
+        && items[0].keys().hasAll(['name', 'qty', 'price'])
+        && items[0].keys().hasOnly(['name', 'qty', 'price'])
+        && items[0].name is string
+        && items[0].name.size() >= 1
+        && items[0].name.size() <= 100
+        && items[0].qty is number
+        && items[0].qty >= 1
+        && items[0].qty <= 50
+        && items[0].price is number
+        && items[0].price >= 0
+        && items[0].price <= 50000;
+    }
+
+    function isValidOrder(data) {
+      return data.keys().hasAll([
+          'orderCode', 'seat', 'hall', 'items', 'paymentType',
+          'totalAmount', 'status', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'orderCode', 'seat', 'hall', 'items', 'paymentType',
+          'totalAmount', 'status', 'source', 'createdAt', 'updatedAt'
+        ])
+        && data.orderCode is string
+        && data.orderCode.size() >= 4
+        && data.orderCode.size() <= 24
+        && data.orderCode.matches('^ORD-[A-Z0-9-]+$')
+        && data.seat is string
+        && data.seat.size() >= 1
+        && data.seat.size() <= 16
+        && data.seat.matches('^[A-Za-z0-9-]+$')
+        && data.hall is string
+        && data.hall.size() >= 1
+        && data.hall.size() <= 48
+        && data.items is list
+        && data.items.size() >= 1
+        && data.items.size() <= 20
+        && isValidFirstItem(data.items)
+        && data.paymentType in ['digital', 'cash']
+        && data.totalAmount is number
+        && data.totalAmount >= 0
+        && data.totalAmount <= 100000
+        && data.status in ['new', 'preparing', 'delivered']
+        && (!('source' in data) || data.source in ['customer_qr', 'kds_simulator', 'kds_test'])
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidStatusTransition() {
+      return existing().status != 'delivered'
+        && (
+          (existing().status == 'new' && incoming().status in ['preparing', 'delivered'])
+          || (existing().status == 'preparing' && incoming().status == 'delivered')
+        );
+    }
+
+    // Orders collection: Canteen KDS (zero-login QR display) + Customer Order Senders
+    match /orders/{orderId} {
+      // KDS reads active & completed orders (bounded by status values)
+      allow get: if isValidId(orderId);
+      allow list: if resource.data.status in ['new', 'preparing', 'delivered'];
+
+      // Customer / KDS simulator creates new order with strict schema & timestamp check
+      allow create: if isValidId(orderId)
+        && isValidOrder(incoming())
+        && incoming().status == 'new'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      // KDS staff transitions status ('new' -> 'preparing' -> 'delivered')
+      // Terminal state ('delivered') is locked; immutable fields cannot change
+      allow update: if isValidId(orderId)
+        && isValidOrder(incoming())
+        && isValidStatusTransition()
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time;
+
+      // Preserve order history; disallow arbitrary deletion
+      allow delete: if false;
+    }
+
+    // Health check document for boot connection test
+    match /test/connection {
+      allow get: if true;
+      allow list, write: if false;
+    }
+  }
+}

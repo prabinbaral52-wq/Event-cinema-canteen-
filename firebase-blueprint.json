@@ -1,0 +1,81 @@
+{
+  "entities": {
+    "Order": {
+      "title": "CanteenOrder",
+      "description": "A cinema concession order sent by a customer or simulator to the Canteen KDS.",
+      "type": "object",
+      "properties": {
+        "orderCode": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 24,
+          "pattern": "^ORD-[A-Z0-9-]+$",
+          "description": "Human-readable order identifier (e.g., ORD-8492)."
+        },
+        "seat": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16,
+          "pattern": "^[A-Za-z0-9-]+$",
+          "description": "Cinema seat number (e.g., F-12)."
+        },
+        "hall": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 48,
+          "description": "Cinema hall or screen name (e.g., Hall 1 / Screen 1)."
+        },
+        "items": {
+          "type": "array",
+          "description": "Bounded list of ordered concession items (max 20 items)."
+        },
+        "paymentType": {
+          "type": "string",
+          "enum": ["digital", "cash"],
+          "description": "Whether paid digitally via Fonepay or cash collection at seat."
+        },
+        "totalAmount": {
+          "type": "number",
+          "description": "Total order price in Nepalese Rupees."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["new", "preparing", "delivered"],
+          "description": "Current kitchen fulfillment state."
+        },
+        "source": {
+          "type": "string",
+          "enum": ["customer_qr", "kds_simulator", "kds_test"],
+          "description": "Origin of the order."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when order was placed."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when order status was last updated."
+        }
+      },
+      "required": [
+        "orderCode",
+        "seat",
+        "hall",
+        "items",
+        "paymentType",
+        "totalAmount",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/orders/{orderId}": {
+      "schema": { "$ref": "#/entities/Order" },
+      "description": "Live cinema concession orders listened to by the Canteen KDS."
+    }
+  }
+}
